@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import getDataUri from '../utils/datauri.js';
 
-export const register = async (req, req) => {
+export const register = async (req, res) => {
     try {
         const { username, email, password } = req.body;
         if (!username || !email || !password) {
