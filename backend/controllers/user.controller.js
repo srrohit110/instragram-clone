@@ -2,6 +2,7 @@ import { User } from '../models/user.modal.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import getDataUri from '../utils/datauri.js';
+import cloudinary from '../utils/cloudinary.js';
 
 export const register = async (req, res) => {
     try {
@@ -59,11 +60,7 @@ export const login = async (req, res) => {
                 success: false,
             });
         }
-        const token = jwt.sign({ userId: user._id }, process.env.SECRET_KEY,
-            {
-                expiresIn: '1h',
-            }
-        );
+       
         user = {
             _id: user._id,
             username: user.username,
@@ -75,7 +72,12 @@ export const login = async (req, res) => {
             posts: user.posts
 
         }
-        return res.cookies('token', token, { httpOnly: true, sameSite: 'strict', maxiAge: 1 * 24 * 60 * 60 * 1000 }).json({
+        const token =await jwt.sign({ userId: user._id }, process.env.SECRET_KEY,
+            {
+                expiresIn: '1d',
+            }
+        );
+        return res.cookie('token', token, { httpOnly: true, sameSite: 'strict', maxiAge: 1 * 24 * 60 * 60 * 1000 }).json({
             message: `Welcome Back ${user.username}`,
             success: true,
             user
@@ -89,7 +91,7 @@ export const login = async (req, res) => {
 
 export const logout = async (_, res) => {
     try {
-        return res.cookies("token", "", { maxAge: 0 }).json({
+        return res.cookie("token", "", { maxAge: 0 }).json({
             message: "Logged out successfully",
             success: true
         });
@@ -101,8 +103,10 @@ export const logout = async (_, res) => {
 
 export const getProfile = async (req, res) => {
     try {
-        const userId = req.params.Id;
-        const user = await User.findById(userId);
+        const userId = req.params.id;
+        let user = await User.findById(userId).select('-password');
+       
+        
         return res.status(200).json({
             user,
             success: true
@@ -114,7 +118,7 @@ export const getProfile = async (req, res) => {
 
 export const editProfile = async (req, res) => {
     try {
-        const userId = req.Id;
+        const userId = req.id;
         const { bio, gender } = req.body;
         const profilePicture = req.file;
         let cloudResponse;
@@ -148,7 +152,7 @@ export const editProfile = async (req, res) => {
 
 export const getSuggestedUser = async (req, res) => {
     try {
-        const suggestedUser = await User.find({ _id: { $ne: req.id } }).selecct("password");
+        const suggestedUser = await User.find({ _id: { $ne: req.id } }).select("password");
         if (!suggestedUser) {
             return res.status(404).json({
                 message: "No suggested user found",

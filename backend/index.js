@@ -30,6 +30,6 @@ app.use("/api/v1/user",userRoute);
 
 
 app.listen(PORT,()=>{
-    connectDB
+    connectDB()
     console.log(`Server Listen At Port ${PORT}`)
 })
