@@ -4,4 +4,4 @@ text:{type:String ,required:true},
 author:{type:mongoose.Schema.Types.ObjectId,ref:'user',reuired:true},
 post:{type:mongoose.Schema.Types.ObjectId,ref:'post',required:true},
 });
-export default  CommentSchema = mongoose.model('comment', CommentSchema);
+export const  Comment = mongoose.model('comment', CommentSchema);

@@ -1,5 +1,6 @@
 import sharp from 'sharp';
 import { Post } from '../models/post.modal.js';
+import { Comment } from '../models/comment.model.js';
 
 export const addNewPost = async (req, res) => {
     try {
