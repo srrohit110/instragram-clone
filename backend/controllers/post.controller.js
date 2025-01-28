@@ -1,12 +1,15 @@
 import sharp from 'sharp';
 import { Post } from '../models/post.modal.js';
+import { User } from '../models/user.modal.js';
 import { Comment } from '../models/comment.model.js';
+import cloudinary from '../utils/cloudinary.js';
 
 export const addNewPost = async (req, res) => {
     try {
         const { caption } = req.body;
         const image = req.file;
         const authorID = req.id;
+
         if (!image) return res.status(400).json({ message: "Please add an image" });
         //image upload
         const optimizedImageBuffer = await sharp(image.buffer)
@@ -21,7 +24,7 @@ export const addNewPost = async (req, res) => {
         const post = await Post.create({
             caption: caption,
             image: cloudResponse.secure_url,
-            authorID: authorID
+            author: authorID
         });
         const user = await User.findById(authorID);
         if (user) {
@@ -37,40 +40,45 @@ export const addNewPost = async (req, res) => {
 
     } catch (error) {
         console.log(error);
+        return res.status(404).json({
+            error: error,
+            erroMmessage: error.message,
+            message: "New post not added",
+            success: false,
+        });
     }
 }
 export const getAllPosts = async (req, res) => {
     try {
-        const posts = await Post.find().populate({ path: 'author', select: 'username,profilePicture' }).
-            sort({ createdAt: -1 })
-            .populate({
-                path: 'comment',
-                select: '-password',
-                sort: ({ createdAt: -1 }),
-                populate: {
-                    path: 'author',
-                    select: 'username,profilePicture',
-                }
-            });
+
+        const posts = await Post.find().populate({ path: 'author', select: 'username profilePicture' }).sort({ createdAt: -1 });
+
         return res.status(200).json({ posts: posts, success: true });
     } catch (error) {
         console.log(error);
+        return res.status(404).json({
+            error: error,
+            erroMmessage: error.message,
+            message: "New post not added",
+            success: false,
+        });
     }
 };
 
 export const getUserPost = async (req, res) => {
     try {
         const authorID = req.id;
-        const posts = await Post.find({ authorID: authorID }).populate({
-            path: 'author', select: 'username,profilePicture'
-        })
+        const posts = await Post.find({ author: authorID })
             .populate({
-                path: 'comment',
+                path: 'author', select: 'username profilePicture'
+            })
+            .populate({
+                path: 'Comments',
                 select: '-password',
                 sort: ({ createdAt: -1 }),
                 populate: {
                     path: 'author',
-                    select: 'username,profilePicture',
+                    select: 'username profilePicture',
                 }
             });
         return res.status(200).json({ posts: posts, success: true });
@@ -122,19 +130,22 @@ export const addcomment = async (req, res) => {
 
         const postID = req.params.id;
         const commentKarneWalaKiId = req.id;
-        const {text} = req.body;
+        const { text } = req.body;
         const post = await Post.findById(postID);
         if (!text) return res.status(404).json({ message: "text not found", success: false });
-        const comment = await Comment.create({ text, author: commentKarneWalaKiId,post:postID }).populate( {
-            path: 'author',
-            select: 'username,profilePicture',
-        });
-        
-         post.comments.push(comment._id );
-         await post.save();
-         return res.status(200).json({ message: "Comment added successfully", success: true });
-    }catch(error){
+        const comment = await Comment.create({ text, author: commentKarneWalaKiId, post: postID })
+        // .populate({
+        //     path: 'author',
+        //     select: 'username profilePicture',
+        // });
+
+        post.Comments.push(comment._id);
+        await post.save();
+        return res.status(200).json({ message: "Comment added successfully", success: true });
+    } catch (error) {
         console.log(error);
+        return res.status(404).json({ message: "Comment not added successfully", success: false, error: error, errorMessage: error.message });
+
     }
 }
 
@@ -143,32 +154,34 @@ export const getCommentsOfPost = async (req, res) => {
         const postID = req.params.id;
         const comments = await Comment.find({ post: postID }).populate({
             path: 'author',
-            select: 'username,profilePicture',
-            });
-            return res.status(200).json({ comments, success: true });
+            select: 'username profilePicture',
+        });
+        return res.status(200).json({ comments, success: true });
 
-    }catch(error){
+    } catch (error) {
         console.log(error);
     }
 }
 
 export const deletePost = async (req, res) => {
     try {
-
-        if(Post.author.toString() === authorID) return res.status(403).json({ message: "unauthorized", success: true });
+        const authorID = req.id;
+        const posts = await Post.find({ author: authorID });
+        if (!posts) return res.status(403).json({ message: "Post not found!", success: true });
         // delete post
+        const postID = req.params.id;
         await Post.findByIdAndDelete(postID);
 
         //remove the post id from the user
         let user = await User.findById(authorID);
-        user.posts=user.posts.filter(id =>id.toString() === postId);
+        user.posts = user.posts.filter(id => id.toString() === postID);
         await user.save();
         // delete the comments of the post
         await Comment.deleteMany({ post: postID });
-         
+
         return res.status(200).json({ message: "Post deleted successfully", success: true });
 
-    }catch(error){
+    } catch (error) {
         console.log(error);
     }
 }
@@ -178,17 +191,22 @@ export const bookmarkPost = async (req, res) => {
         const postID = req.params.id;
         const authorID = req.id;
         const post = await Post.findById(postID);
-        if(!post) return res.status(404).json({ message: "Post not found", success: false });
+        if (!post) return res.status(404).json({ message: "Post not found", success: false });
         const user = await User.findById(authorID);
-        if(user.bookmarks.includes(post._ID)) {
-            await user.updateOne({$pull:{bookmarks:post._id}});
+        if (user.bookmarks.includes(post._ID)) {
+            await user.updateOne({ $pull: { bookmarks: post._id } });
             await user.save();
-            return res.status(200).json({ message: "Post unbookmarked", success: true
-                });
+            return res.status(200).json({
+                message: "Post unbookmarked", success: true
+            });
         }
+        await user.updateOne({ $addToSet: { bookmarks: post._id } });
+        return res.status(200).json({
+            message: "Post bookmarked successfully",
+            success: true,
+        });
 
-
-    }catch(error){
+    } catch (error) {
         console.log(error);
     }
 }
